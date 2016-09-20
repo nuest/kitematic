@@ -1,0 +1,195 @@
+import _ from 'underscore';
+import $ from 'jquery';
+import React from 'react/addons';
+import electron from 'electron';
+const remote = electron.remote;
+const dialog = remote.dialog;
+import ContainerUtil from '../utils/ContainerUtil';
+import containerActions from '../actions/ContainerActions';
+import util from '../utils/Util';
+
+var ContainerSettingsModel = React.createClass({
+  mixins: [React.addons.LinkedStateMixin],
+
+  contextTypes: {
+    router: React.PropTypes.func
+  },
+
+  getInitialState: function () {
+    // check if image is supported
+    let supported = false;
+    if (this.props.container.Config.Image.startsWith('nuest/docker-qgis-model')) {
+      supported = true;
+    }
+
+    //let [supported, openStdin, privileged] = ContainerUtil.mode(this.props.container) || [true, true, false];
+    return {
+      supported: supported
+      //openStdin: openStdin,
+      //privileged: privileged
+    };
+  },
+
+  handleSaveModelOptions: function () {
+    let parameter01 = this.state.parameter01;
+    containerActions.update(this.props.container.Name, { parameter01: parameter01 });
+  },
+
+  handleChangeParameter01: function () {
+    this.setState({
+      tty: !this.state.tty
+    });
+  },
+
+  handleChangeOpenStdin: function () {
+    this.setState({
+      openStdin: !this.state.openStdin
+    });
+  },
+
+  handleChangePrivileged: function () {
+    this.setState({
+      privileged: !this.state.privileged
+    });
+  },
+
+  handleReset: function () {
+    dialog.showMessageBox({
+      message: 'Are you sure you want to reset all model parameters?',
+      buttons: ['Yes', 'No']
+    }, index => {
+      if (index === 0) {
+        console.log('RESET NOW!');
+        // containerActions.destroy(this.props.container.Name);
+      }
+    });
+  },
+
+  handleSaveEnvVars: function () {
+    let list = [];
+    _.each(this.state.env, kvp => {
+      let [, key, value] = kvp;
+      if ((key && key.length) || (value && value.length)) {
+        list.push(key + '=' + value);
+      }
+    });
+    containerActions.update(this.props.container.Name, { Env: list });
+  },
+
+  handleChangeEnvKey: function (index, event) {
+    let env = _.map(this.state.env, _.clone);
+    env[index][1] = event.target.value;
+    this.setState({
+      env: env
+    });
+  },
+
+  handleChangeEnvVal: function (index, event) {
+    let env = _.map(this.state.env, _.clone);
+    env[index][2] = event.target.value;
+    this.setState({
+      env: env
+    });
+  },
+
+  handleAddEnvVar: function () {
+    let env = _.map(this.state.env, _.clone);
+    env.push([util.randomId(), '', '']);
+    this.setState({
+      env: env
+    });
+  },
+
+  handleRemoveEnvVar: function (index) {
+    let env = _.map(this.state.env, _.clone);
+    env.splice(index, 1);
+
+    if (env.length === 0) {
+      env.push([util.randomId(), '', '']);
+    }
+
+    this.setState({
+      env: env
+    });
+  },
+
+  render: function () {
+    if (!this.props.container) {
+      return false;
+    }
+
+    let containerInfo = (
+      <div className="settings-section">
+        <h3>Container Info</h3>
+        <div className="container-info-row">
+          <div className="label-id">ID</div>
+          <input type="text" className="line disabled" defaultValue={this.props.container.Id} disabled></input>
+        </div>
+        <div className="container-info-row">
+          <div className="label-name">NAME</div>
+          <input type="text" className="line disabled" defaultValue={this.props.container.Name} disabled></input>
+        </div>
+        <div className="container-info-row">
+          <div className="label-name">IMAGE</div>
+          <input type="text" className="line disabled" defaultValue={this.props.container.Config.Image} disabled></input>
+        </div>
+      </div>
+    );
+
+    if (!this.state.supported) {
+      return (
+        <div className="settings-panel">
+          {containerInfo}
+          <div className="settings-section">
+            <div className="error">
+              <p className="errorMessage">The container image <span className="image">{this.props.container.Config.Image}</span> does not support model parameters!</p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    let vars = _.map(this.state.env, (kvp, index) => {
+      let [id, key, val] = kvp;
+      let icon;
+      if (index === this.state.env.length - 1) {
+        icon = <a onClick={this.handleAddEnvVar} className="only-icon btn btn-positive small"><span className="icon icon-add"></span></a>;
+      } else {
+        icon = <a onClick={this.handleRemoveEnvVar.bind(this, index) } className="only-icon btn btn-action small"><span className="icon icon-delete"></span></a>;
+      }
+
+      return (
+        <div key={id} className="keyval-row">
+          <input type="text" className="key line" defaultValue={key} onChange={this.handleChangeEnvKey.bind(this, index) }></input>
+          <input type="text" className="val line" defaultValue={val} onChange={this.handleChangeEnvVal.bind(this, index) }></input>
+          {icon}
+        </div>
+      );
+    });
+
+    return (
+      <div className="settings-panel">
+
+        {containerInfo}
+        <div className="settings-section">
+          <h3>Model Options</h3>
+          <div className="env-vars-labels">
+            <div className="label-key">KEY</div>
+            <div className="label-val">VALUE</div>
+          </div>
+          <div className="env-vars">
+            {vars}
+          </div>
+          <a className="btn btn-action" disabled={this.props.container.State.Updating} onClick={this.handleSaveModelOptions}>Save</a>
+
+        </div>
+        <div className="settings-section">
+          <h3>Reset</h3>
+          <a className="btn btn-action" onClick={this.handleReset}>Reset model parameters</a>
+        </div>
+      </div>
+    );
+  }
+});
+
+module.exports = ContainerSettingsModel;
