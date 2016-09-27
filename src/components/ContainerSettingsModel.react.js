@@ -7,6 +7,7 @@ const dialog = remote.dialog;
 import ContainerUtil from '../utils/ContainerUtil';
 import containerActions from '../actions/ContainerActions';
 import util from '../utils/Util';
+import shell from 'shell';
 
 var ContainerSettingsModel = React.createClass({
   mixins: [React.addons.LinkedStateMixin],
@@ -16,15 +17,32 @@ var ContainerSettingsModel = React.createClass({
   },
 
   getInitialState: function () {
+    let env = ContainerUtil.env(this.props.container) || [];
+    var workspaceDir = '';
+    _.each(env, e => {
+      if (e[0] === 'QGIS_WORKSPACE') {
+        workspaceDir = e[1];
+      }
+    });
+
     // check if image is supported
     let supported = false;
-    if (this.props.container.Config.Image.startsWith('nuest/docker-qgis-model')) {
+    if (this.props.container.Config.Image.indexOf('qgis-model') !== -1) {
       supported = true;
     }
 
+    var dataDir = 'No Folder';
+    _.each(this.props.container.Mounts, m => {
+      if (m.Destination === workspaceDir) {
+        dataDir = m.Source;
+      }
+    });
+
     //let [supported, openStdin, privileged] = ContainerUtil.mode(this.props.container) || [true, true, false];
     return {
-      supported: supported
+      supported: supported,
+      dataDir: dataDir,
+      workspaceDir: workspaceDir
       //openStdin: openStdin,
       //privileged: privileged
     };
@@ -60,7 +78,9 @@ var ContainerSettingsModel = React.createClass({
     }, index => {
       if (index === 0) {
         console.log('RESET NOW!');
-        // containerActions.destroy(this.props.container.Name);
+        this.setState({
+          dataDir: 'No Folder'
+        });
       }
     });
   },
@@ -111,6 +131,53 @@ var ContainerSettingsModel = React.createClass({
     this.setState({
       env: env
     });
+  },
+
+  handleChooseDataDirClick: function () {
+    dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] }, (filenames) => {
+      if (!filenames) {
+        return;
+      }
+
+      var directory = filenames[0];
+
+      if (!directory || (!util.isNative() && directory.indexOf(util.home()) === -1)) {
+        dialog.showMessageBox({
+          type: 'warning',
+          buttons: ['OK'],
+          message: 'Invalid directory - Please make sure the directory exists and you can read/write to it.'
+        });
+        return;
+      }
+
+      // update the mount
+      let mounts = _.clone(this.props.container.Mounts);
+      _.each(mounts, m => {
+        if (m.Destination === this.state.workspaceDir) {
+          m.Source = util.windowsToLinuxPath(directory);
+          m.Driver = null;
+          console.log('Updated mount: ', JSON.stringify(m));
+        }
+      });
+      let binds = mounts.map(m => {
+        return m.Source + ':' + m.Destination;
+      });
+      let hostConfig = _.extend(this.props.container.HostConfig, { Binds: binds });
+      containerActions.update(this.props.container.Name, { Mounts: mounts, HostConfig: hostConfig });
+
+      // update the state
+      this.setState({
+        dataDir: directory
+      });
+    });
+  },
+
+  handleOpenDataDirClick: function (u, path) {
+    if (u.isWindows()) {
+      shell.showItemInFolder(u.linuxToWindowsPath(path));
+    } else {
+      shell.showItemInFolder(path);
+    }
   },
 
   render: function () {
@@ -167,10 +234,45 @@ var ContainerSettingsModel = React.createClass({
       );
     });
 
+    var dataDirSource = null;
+    if (!this.state.dataDir) {
+      dataDirSource = (
+        <span className="value-right">No Folder</span>
+      );
+    } else {
+      let local = util.isWindows() ? util.linuxToWindowsPath(this.state.dataDir) : this.state.dataDir;
+      dataDirSource = (
+        <a className="value-right" onClick={this.handleOpenDataDirClick.bind(this, util, this.state.dataDir)}>{local.replace(process.env.HOME, '~')}</a>
+      );
+    }
+    var dataDirUI = (
+      <tr>
+          <td>{dataDirSource}</td>
+          <td>
+            <a className="btn btn-action small" disabled={this.props.container.State.Updating} onClick={this.handleChooseDataDirClick.bind(this) }>Change</a>
+          </td>
+        </tr>
+    );
+
     return (
       <div className="settings-panel">
 
         {containerInfo}
+
+        <div className="settings-section">
+          <h3>Input Data Directory</h3>
+          <table className="table volumes">
+            <thead>
+              <tr>
+                <th>DATA FOLDER</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dataDirUI}
+            </tbody>
+          </table>
+        </div>
+
         <div className="settings-section">
           <h3>Model Options</h3>
           <div className="env-vars-labels">
@@ -181,8 +283,8 @@ var ContainerSettingsModel = React.createClass({
             {vars}
           </div>
           <a className="btn btn-action" disabled={this.props.container.State.Updating} onClick={this.handleSaveModelOptions}>Save</a>
-
         </div>
+
         <div className="settings-section">
           <h3>Reset</h3>
           <a className="btn btn-action" onClick={this.handleReset}>Reset model parameters</a>
