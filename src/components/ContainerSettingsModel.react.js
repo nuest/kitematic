@@ -18,7 +18,7 @@ var ContainerSettingsModel = React.createClass({
 
   getInitialState: function () {
     let env = ContainerUtil.env(this.props.container) || [];
-    var workspaceDir = '';
+    let workspaceDir = '';
     _.each(env, e => {
       if (e[0] === 'QGIS_WORKSPACE') {
         workspaceDir = e[1];
@@ -31,44 +31,54 @@ var ContainerSettingsModel = React.createClass({
       supported = true;
     }
 
-    var dataDir = 'No Folder';
+    let dataDir = null;
     _.each(this.props.container.Mounts, m => {
-      if (m.Destination === workspaceDir) {
+      if (m.Destination === workspaceDir && m.Source && (m.Source.indexOf('/var/lib/docker/volumes') !== 0)) {
         dataDir = m.Source;
       }
     });
 
-    //let [supported, openStdin, privileged] = ContainerUtil.mode(this.props.container) || [true, true, false];
+    let defaultOptions = [
+      {
+        id: 'MODEL_INPUT_1',
+        name: 'first setting',
+        value: '100',
+        comment: 'this is a comment for the first setting'
+      },
+      {
+        id: 'MODEL_INPUT_2',
+        name: 'second setting',
+        value: 'huge'
+      }
+    ];
+
+    let options = _.map(defaultOptions, _.clone);
+    _.each(options, function (option) {
+      // update options from env
+      _.each(env, e => {
+        if (e[0] === option.id) {
+          option.value = e[1];
+        }
+      });
+    });
+
+    // save all options to env
+    let list = [];
+    _.each(options, option => {
+      if ((option.id && option.id.length) || (option.value && option.value.length)) {
+        list.push(option.id + '=' + option.value);
+      }
+    });
+    containerActions.update(this.props.container.Name, { Env: list });
+
     return {
       supported: supported,
       dataDir: dataDir,
-      workspaceDir: workspaceDir
+      options: options,
+      defaults: defaultOptions
       //openStdin: openStdin,
       //privileged: privileged
     };
-  },
-
-  handleSaveModelOptions: function () {
-    let parameter01 = this.state.parameter01;
-    containerActions.update(this.props.container.Name, { parameter01: parameter01 });
-  },
-
-  handleChangeParameter01: function () {
-    this.setState({
-      tty: !this.state.tty
-    });
-  },
-
-  handleChangeOpenStdin: function () {
-    this.setState({
-      openStdin: !this.state.openStdin
-    });
-  },
-
-  handleChangePrivileged: function () {
-    this.setState({
-      privileged: !this.state.privileged
-    });
   },
 
   handleReset: function () {
@@ -78,58 +88,43 @@ var ContainerSettingsModel = React.createClass({
     }, index => {
       if (index === 0) {
         console.log('RESET NOW!');
+        let resetOptions = _.map(this.state.defaults, _.clone);
+
         this.setState({
-          dataDir: 'No Folder'
+          dataDir: null,
+          options: resetOptions
+          // TODO reset options to default from label
         });
       }
     });
   },
 
-  handleSaveEnvVars: function () {
+  handleSaveOptions: function () {
     let list = [];
-    _.each(this.state.env, kvp => {
-      let [, key, value] = kvp;
-      if ((key && key.length) || (value && value.length)) {
-        list.push(key + '=' + value);
+    _.each(this.state.options, option => {
+      if ((option.id && option.id.length) || (option.value && option.value.length)) {
+        list.push(option.id + '=' + option.value);
       }
     });
     containerActions.update(this.props.container.Name, { Env: list });
   },
 
-  handleChangeEnvKey: function (index, event) {
-    let env = _.map(this.state.env, _.clone);
-    env[index][1] = event.target.value;
+  handleChangeOption: function (index, event) {
+    let options = _.map(this.state.options, _.clone);
+    options[index].value = event.target.value;
+
     this.setState({
-      env: env
+      options: options
     });
   },
 
-  handleChangeEnvVal: function (index, event) {
-    let env = _.map(this.state.env, _.clone);
-    env[index][2] = event.target.value;
-    this.setState({
-      env: env
-    });
-  },
-
-  handleAddEnvVar: function () {
-    let env = _.map(this.state.env, _.clone);
-    env.push([util.randomId(), '', '']);
-    this.setState({
-      env: env
-    });
-  },
-
-  handleRemoveEnvVar: function (index) {
-    let env = _.map(this.state.env, _.clone);
-    env.splice(index, 1);
-
-    if (env.length === 0) {
-      env.push([util.randomId(), '', '']);
-    }
+  // FIXME
+  handleResetOption: function (index) {
+    let options = _.map(this.state.options, _.clone);
+    options[index].value = this.state.defaults[index].value;
 
     this.setState({
-      env: env
+      options: options
     });
   },
 
@@ -216,23 +211,18 @@ var ContainerSettingsModel = React.createClass({
       );
     }
 
-    let vars = _.map(this.state.env, (kvp, index) => {
-      let [id, key, val] = kvp;
-      let icon;
-      if (index === this.state.env.length - 1) {
-        icon = <a onClick={this.handleAddEnvVar} className="only-icon btn btn-positive small"><span className="icon icon-add"></span></a>;
-      } else {
-        icon = <a onClick={this.handleRemoveEnvVar.bind(this, index) } className="only-icon btn btn-action small"><span className="icon icon-delete"></span></a>;
-      }
+    let options = _.map(this.state.options, (object, index) => {
+      let title = object.comment || '';
+      let name = object.name || object.id;
 
       return (
-        <div key={id} className="keyval-row">
-          <input type="text" className="key line" defaultValue={key} onChange={this.handleChangeEnvKey.bind(this, index) }></input>
-          <input type="text" className="val line" defaultValue={val} onChange={this.handleChangeEnvVal.bind(this, index) }></input>
-          {icon}
+        <div key={object.id} className="keyval-row">
+          <input type="text" className="key line disabled" defaultValue={name} title={title} disabled></input>
+          <input type="text" className="val line" defaultValue={object.value} title={title} onChange={this.handleChangeOption.bind(this, index) }></input>
         </div>
       );
     });
+    // <a onClick={this.handleResetOption.bind(this, index) } className="only-icon btn btn-action small"><span className="icon icon-delete"></span></a>
 
     var dataDirSource = null;
     if (!this.state.dataDir) {
@@ -276,13 +266,13 @@ var ContainerSettingsModel = React.createClass({
         <div className="settings-section">
           <h3>Model Options</h3>
           <div className="env-vars-labels">
-            <div className="label-key">KEY</div>
+            <div className="label-key">OPTION</div>
             <div className="label-val">VALUE</div>
           </div>
           <div className="env-vars">
-            {vars}
+            {options}
           </div>
-          <a className="btn btn-action" disabled={this.props.container.State.Updating} onClick={this.handleSaveModelOptions}>Save</a>
+          <a className="btn btn-action" disabled={this.props.container.State.Updating} onClick={this.handleSaveOptions}>Save</a>
         </div>
 
         <div className="settings-section">
