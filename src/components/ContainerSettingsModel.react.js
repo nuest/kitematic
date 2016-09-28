@@ -17,20 +17,38 @@ var ContainerSettingsModel = React.createClass({
   },
 
   getInitialState: function () {
+    // check if image is supported
+    let defaultOptions = null;
+    if (this.props.container.Config.Labels['de.ifgi.qgis-model.options']) {
+      defaultOptions = JSON.parse(this.props.container.Config.Labels['de.ifgi.qgis-model.options']);
+      console.log('Loaded options from LABEL: ' + JSON.stringify(defaultOptions));
+    } else {
+      let msg = 'No LABEL "de.ifgi.qgis-model.options" with defaults found.';
+      console.log(msg);
+      return {
+        supported: false,
+        message: msg
+      };
+    }
+
+    // get workspace directory inside container
+    let workspaceDir = null;
     let env = ContainerUtil.env(this.props.container) || [];
-    let workspaceDir = '';
     _.each(env, e => {
       if (e[0] === 'QGIS_WORKSPACE') {
         workspaceDir = e[1];
       }
     });
-
-    // check if image is supported
-    let supported = false;
-    if (this.props.container.Config.Image.indexOf('qgis-model') !== -1) {
-      supported = true;
+    if (!workspaceDir) {
+      let msg = 'No environment variable "QGIS_WORKSPACE" defined, cannot handle data directory';
+      console.log(msg);
+      return {
+        supported: false,
+        message: msg
+      };
     }
 
+    // use workspace directory to identify exising mount
     let dataDir = null;
     _.each(this.props.container.Mounts, m => {
       if (m.Destination === workspaceDir && m.Source && (m.Source.indexOf('/var/lib/docker/volumes') !== 0)) {
@@ -38,22 +56,13 @@ var ContainerSettingsModel = React.createClass({
       }
     });
 
-    let defaultOptions = [
-      {
-        id: 'MODEL_INPUT_1',
-        name: 'first setting',
-        value: '100',
-        comment: 'this is a comment for the first setting'
-      },
-      {
-        id: 'MODEL_INPUT_2',
-        name: 'second setting',
-        value: 'huge'
-      }
-    ];
-
-    let options = _.map(defaultOptions, _.clone);
+    // create options object
+    let options = null;
+    options = _.map(defaultOptions, _.clone);
     _.each(options, function (option) {
+      // create default property
+      option.default = option.value;
+
       // update options from env
       _.each(env, e => {
         if (e[0] === option.id) {
@@ -71,13 +80,11 @@ var ContainerSettingsModel = React.createClass({
     });
     containerActions.update(this.props.container.Name, { Env: list });
 
+
     return {
-      supported: supported,
+      supported: true,
       dataDir: dataDir,
-      options: options,
-      defaults: defaultOptions
-      //openStdin: openStdin,
-      //privileged: privileged
+      options: options
     };
   },
 
@@ -88,13 +95,22 @@ var ContainerSettingsModel = React.createClass({
     }, index => {
       if (index === 0) {
         console.log('RESET NOW!');
-        let resetOptions = _.map(this.state.defaults, _.clone);
+        let resetOptions = _.map(this.state.options, _.clone);
+
+        let list = [];
+        _.each(resetOptions, option => {
+          if ((option.id && option.id.length) || (option.value && option.value.length)) {
+            list.push(option.id + '=' + option.value);
+            option.value = option.default;
+          }
+        });
+        containerActions.update(this.props.container.Name, { Env: list });
 
         this.setState({
           dataDir: null,
           options: resetOptions
-          // TODO reset options to default from label
         });
+        // FIXME need to "save", too, but does not work
       }
     });
   },
@@ -204,7 +220,8 @@ var ContainerSettingsModel = React.createClass({
           {containerInfo}
           <div className="settings-section">
             <div className="error">
-              <p className="errorMessage">The container image <span className="image">{this.props.container.Config.Image}</span> does not support model parameters!</p>
+              <p className="errorMessage">The image <span className="image">{this.props.container.Config.Image}</span> does not support model options!</p>
+              <p className="errorMessage">{this.state.message}</p>
             </div>
           </div>
         </div>
@@ -218,7 +235,8 @@ var ContainerSettingsModel = React.createClass({
       return (
         <div key={object.id} className="keyval-row">
           <input type="text" className="key line disabled" defaultValue={name} title={title} disabled></input>
-          <input type="text" className="val line" defaultValue={object.value} title={title} onChange={this.handleChangeOption.bind(this, index) }></input>
+          <input type="text" className="val-narrow line" defaultValue={object.value} title={title} onChange={this.handleChangeOption.bind(this, index) }></input>
+          <input type="text" className="val-default line disabled" defaultValue={object.default} title={title} disabled></input>
         </div>
       );
     });
@@ -232,16 +250,16 @@ var ContainerSettingsModel = React.createClass({
     } else {
       let local = util.isWindows() ? util.linuxToWindowsPath(this.state.dataDir) : this.state.dataDir;
       dataDirSource = (
-        <a className="value-right" onClick={this.handleOpenDataDirClick.bind(this, util, this.state.dataDir)}>{local.replace(process.env.HOME, '~')}</a>
+        <a className="value-right" onClick={this.handleOpenDataDirClick.bind(this, util, this.state.dataDir) }>{local.replace(process.env.HOME, '~') }</a>
       );
     }
     var dataDirUI = (
       <tr>
-          <td>{dataDirSource}</td>
-          <td>
-            <a className="btn btn-action small" disabled={this.props.container.State.Updating} onClick={this.handleChooseDataDirClick.bind(this) }>Change</a>
-          </td>
-        </tr>
+        <td>{dataDirSource}</td>
+        <td>
+          <a className="btn btn-action small" disabled={this.props.container.State.Updating} onClick={this.handleChooseDataDirClick.bind(this) }>Change</a>
+        </td>
+      </tr>
     );
 
     return (
@@ -267,7 +285,8 @@ var ContainerSettingsModel = React.createClass({
           <h3>Model Options</h3>
           <div className="env-vars-labels">
             <div className="label-key">OPTION</div>
-            <div className="label-val">VALUE</div>
+            <div className="label-val-narrow">VALUE</div>
+            <div className="label-val-default">DEFAULT</div>
           </div>
           <div className="env-vars">
             {options}
@@ -275,12 +294,12 @@ var ContainerSettingsModel = React.createClass({
           <a className="btn btn-action" disabled={this.props.container.State.Updating} onClick={this.handleSaveOptions}>Save</a>
         </div>
 
-        <div className="settings-section">
-          <h3>Reset</h3>
-          <a className="btn btn-action" onClick={this.handleReset}>Reset model parameters</a>
-        </div>
       </div>
     );
+    // <div className="settings-section">
+    //   <h3>Reset</h3>
+    //   <a className="btn btn-action" disabled={this.props.container.State.Updating} onClick={this.handleReset}>Reset model parameters</a>
+    // </div>
   }
 });
 
