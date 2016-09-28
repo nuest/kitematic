@@ -62,7 +62,7 @@ var ContainerSettings = React.createClass({
               </Router.Link>
               <Router.Link to="containerSettingsModel" params={{name: container.Name}}>
                 <li>
-                  Model (BETA!)
+                  Model
                 </li>
               </Router.Link>
             </ul>
