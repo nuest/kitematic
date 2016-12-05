@@ -291,7 +291,7 @@ var ContainerSettingsModel = React.createClass({
           <div className="env-vars">
             {options}
           </div>
-          <a className="btn btn-action" disabled={this.props.container.State.Updating} onClick={this.handleSaveOptions}>Save</a>
+          <a className="btn btn-action" disabled={this.props.container.State.Updating} onClick={this.handleSaveOptions}>Save and run</a>
         </div>
 
       </div>
