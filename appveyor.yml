@@ -5,8 +5,6 @@ version: "{build}"
 
 image: Visual Studio 2015
 
-install:
-
 init:
   - git config --global core.autocrlf input
   - ps: Install-Product node 4
