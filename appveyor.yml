@@ -1,5 +1,5 @@
 # appveyor file
-# http://www.appveyor.com/docs/appveyor-yml
+# https://www.appveyor.com/docs/appveyor-yml/
 
 version: "{build}"
 
@@ -24,6 +24,11 @@ install:
 branches:
   only:
     - master
+
+artifacts:
+  - path: "release\*.zip"
+    name: AppRelease
+    type: Auto
 
 # disable build and test pahses
 build: off
