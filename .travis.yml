@@ -1,14 +1,19 @@
-# MacOS X build of Kitematic
+# MacOS X and Linux builds of Kitematic
+# See e.g. https://github.com/travis-ci/travis-ci/issues/2311
 sudo: false
 
-language: cpp
+language: node_js
 
-env:
-  - NODE_VERSION="4.1"
+node_js:
+  - '4.1.1'
 
 os:
+  - linux
   - osx
-  
+
+matrix:
+  fast_finish: true
+
 cache:
   directories:
     - node_modules
@@ -19,9 +24,5 @@ install:
   - npm run release
 
 before_install:
-  - git clone https://github.com/creationix/nvm.git /tmp/.nvm;
-    source /tmp/.nvm/nvm.sh;
-    nvm install $NODE_VERSION;
-    nvm use --delete-prefix $NODE_VERSION;
   - node --version
   - npm --version
