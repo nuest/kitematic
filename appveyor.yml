@@ -6,10 +6,10 @@ version: "{build}"
 image: Visual Studio 2015
 
 install:
-  - ps: Install-Product node 4
 
 init:
   - git config --global core.autocrlf input
+  - ps: Install-Product node 4
   - cmd: node --version
   - cmd: npm --version
 
