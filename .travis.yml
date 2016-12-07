@@ -1,13 +1,28 @@
+# MacOS X build of Kitematic
 sudo: false
 
-language: node_js
-node_js:
-    - "4.1.1"
+language: cpp
 
+env:
+  - NODE_VERSION="4.1"
+
+os:
+  - osx
+  
 cache:
   directories:
     - node_modules
 
-script:
+install:
+  - 
   - npm install
-  - npm test
+  #- npm test
+  - npm run release
+
+before_install:
+  - git clone https://github.com/creationix/nvm.git /tmp/.nvm;
+    source /tmp/.nvm/nvm.sh;
+    nvm install $NODE_VERSION;
+    nvm use --delete-prefix $NODE_VERSION;
+  - node --version
+  - npm --version
