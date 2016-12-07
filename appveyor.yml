@@ -1,12 +1,17 @@
 # appveyor file
 # http://www.appveyor.com/docs/appveyor-yml
 
-version: {build}
+version: "{build}"
 
 image: Visual Studio 2015
 
+install:
+  - ps: Install-Product node 4
+
 init:
   - git config --global core.autocrlf input
+  - cmd: node --version
+  - cmd: npm --version
 
 platform:
   - x86
