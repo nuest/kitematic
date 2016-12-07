@@ -21,7 +21,7 @@ cache:
 install:
   - npm install
   #- npm test
-  - npm run release
+  - npm run release-verbose
 
 before_install:
   - node --version
