@@ -1,28 +1,29 @@
-# MacOS X and Linux builds of Kitematic
-# See e.g. https://github.com/travis-ci/travis-ci/issues/2311
 sudo: false
-
 language: node_js
-
 node_js:
-  - '4.1.1'
-
+- 4.1.1
 os:
-  - linux
-  - osx
-
+- linux
+- osx
 matrix:
   fast_finish: true
-
 cache:
   directories:
-    - node_modules
-
+  - node_modules
 install:
-  - npm install
-  #- npm test
-  - npm run release-verbose
+- npm install
+- npm run release-verbose
+#- npm run release
 
-before_install:
-  - node --version
-  - npm --version
+# https://docs.travis-ci.com/user/deployment/releases/
+deploy:
+  provider: releases
+  api_key:
+    secure: MqkKT0VZdBc3VF07ffYfpMog9iQnGP1NZFnCeOtdTaRhDJU+6CovdTsKOLQOllU2s2akVdSpQFi7O32lzMT+rla8mIp+RvqNBEykiRnzhdDWNi7UGgJeYD8+GSAAjdhT4FREd9ga17xuA/ivxwqK18dKIsUnziibxXz9el8o5Uiw+n3vb6OwjMt6w9j+sa6h2CpY5xA+2tcWR5drzf3DrGeaoO7S7Io5SnTlYE2QJFgOe9FCJ7Hm6Y/un/Z6twbtZonY8XypgffKhjwmMTyNDkugkP9L7zQeLyp4HcLALSct1gBrnT+HxmT7vWL6xofhjA883Y7fhWEWChUawS8mPnRblE1YG2tbiNIBq240NPylH1HFP+g45pJPeh4THyyiSj2ERYqne2Jbs4DHC9NF2jGuXewulwjnFyIbmsz5P+f/DUwRrvv1Ik8CpsyuXkxctoVTk84f2YLwPANAWPUYs5VVvZMbm6o7OJ+8cxgjWUDh/cC+AnI6p/18E8uIhzoSezrZ8kZ7dKDPX+0v5hYCQjBjjP+Fhx+qDPvBZxWBqG7WRUAuSZ7ZUEx305V4E1mAzfQrmMy0b5u5mrBksBpzwbLfgIULMnTWg0fJ7oHyiiVcQg0zkWDvflzDUWCYDh8ruGZmQMK1KN+VI/va3cZlrr9lSQgZ47DGwSlOJLiOr0s=
+  file:
+  - dist/*.deb
+  skip_cleanup: true
+  on:
+    repo: nuest/kitematic
+    branch: model-ui
+    tags: true
